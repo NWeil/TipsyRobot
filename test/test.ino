@@ -34,7 +34,7 @@ PID pid(&Input, &Output, &Setpoint, Kp, Ki, Kd, DIRECT);
 MPU6050 mpu;
 
 
-int16_t accY, accZ, gyroY, gyroRate;
+int16_t accY, accZ, gyroY, gyroRate, last, last2, last3, last4, last5, trailAvg;
 volatile float accAngle, gyroAngle=0, currentAngle, prevAngle=0, error, prevError=0, errorSum=0;
 unsigned long currTime, prevTime=0, loopTime;
 volatile int motorPower;
@@ -65,35 +65,41 @@ void setup() {
 void loop() {
 
   // Set variables for timing
-  currTime = millis();
-  loopTime = currTime - prevTime;
-  prevTime = currTime;
+  // currTime = millis();
+  // loopTime = currTime - prevTime;
+  // prevTime = currTime;
   
   // Get gyro and acceleration data
-  gyroY = mpu.getRotationY();
-  accY = mpu.getAccelerationY();
-  accZ = mpu.getAccelerationZ(); 
+  // gyroY = mpu.getRotationY();
+  // accY = mpu.getAccelerationY();
+  // accZ = mpu.getAccelerationZ(); 
 
   // map gyro data to +- 250 and calculate angle based on milisecond loop time
-  gyroRate = map(gyroY, -32768, 32767, -250, 250);
-  gyroAngle = gyroAngle + (float)gyroRate*loopTime/1000;
+  // gyroRate = map(gyroY, -32768, 32767, -250, 250);
+  // gyroAngle = gyroAngle + (float)gyroRate*loopTime/1000;
 
   // Calculate angle based on accelerometer data
   // TODO: make accAngle centered around 0
 
-  accAngle = atan2(accY, accZ)*RAD_TO_DEG;
+  // OLD buggy because tangent
+  // accAngle = atan2(accY, accZ)*RAD_TO_DEG;
 
-  // combine gyro and accelerometer readings
-  currentAngle = 0.9934*(prevAngle + gyroAngle) + 0.0066*(accAngle);
+  // combine gyro and accelerometer readings OLD
+  // currentAngle = 0.9934*(prevAngle + gyroAngle) + 0.0066*(accAngle);
 
+
+  last = accY;
+  last2 = last;
+  last3 = last2;
+  last4 = last3;
+  last5 = last4;
   accY = map(mpu.getAccelerationZ(), -32768, 32767, -255, 255) + 20;
 
+  trailAvg = (accY + last + last2)/5;
 
-  Serial.println(accY);
-  // Serial.print(',');
-  // Serial.println(accZ);
-
-//  Serial.println(currentAngle);
+  Serial.print(accY);
+  Serial.print(',');
+  Serial.println(trailAvg);
 
 
   // Set input to calibrated difference between sensors
