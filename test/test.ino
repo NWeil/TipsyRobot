@@ -14,7 +14,7 @@ Adafruit_DCMotor *left = motorShield.getMotor(2);
 Adafruit_DCMotor *right = motorShield.getMotor(1);
 
 // Global Variables to adjust tuning
-double Throttle = .15;
+double Throttle = .4;
 double Lmultiplier = 1;
 double Calibrationoffset = 0.;
 double Sensitivity = 1;
@@ -25,7 +25,7 @@ int Mode = 0; // 2 is manual 0 is auto 1 is combined
 double Setpoint, Input, Output = 0.0;
 
 //Global PID tuning parameters
-double Kp=3, Ki=5, Kd=0.01;
+double Kp=3, Ki=0.1, Kd=0;
 
 // Define pid class with pointers to global variables
 PID pid(&Input, &Output, &Setpoint, Kp, Ki, Kd, DIRECT);
@@ -34,13 +34,23 @@ PID pid(&Input, &Output, &Setpoint, Kp, Ki, Kd, DIRECT);
 MPU6050 mpu;
 
 
-int16_t accY, accZ, gyroY, gyroRate, last, last2, last3, last4, last5, trailAvg;
+int16_t accZ, gyroY, gyroRate, last, last2, last3, last4, last5, trailAvg;
 volatile float accAngle, gyroAngle=0, currentAngle, prevAngle=0, error, prevError=0, errorSum=0;
 unsigned long currTime, prevTime=0, loopTime;
 volatile int motorPower;
 
 // Set active to true by default
 bool Active = true;
+
+
+
+// Trailing Average Filter
+const int numReadings = 45;
+
+float readings[numReadings];      // the readings from the analog input
+int readIndex = 0;              // the index of the current reading
+float total = 0;                  // the running total
+float average = 0;                // the average
 
 
 
@@ -60,50 +70,60 @@ void setup() {
   // Begin serial at high baud rate to transfer commands quickly
   Serial.begin(115200);   
 
+  // Sets all filter variables to 0
+  for (int thisReading = 0; thisReading < numReadings; thisReading++) {
+    readings[thisReading] = 0;
+  }
+
 }
 
 void loop() {
 
-  // Set variables for timing
-  // currTime = millis();
-  // loopTime = currTime - prevTime;
-  // prevTime = currTime;
-  
-  // Get gyro and acceleration data
-  // gyroY = mpu.getRotationY();
-  // accY = mpu.getAccelerationY();
-  // accZ = mpu.getAccelerationZ(); 
+  // Gathers Y axis acceleration
+  float accY = map(mpu.getAccelerationZ(), -32768, 32767, -255.0, 255.0) + 29;
 
-  // map gyro data to +- 250 and calculate angle based on milisecond loop time
-  // gyroRate = map(gyroY, -32768, 32767, -250, 250);
-  // gyroAngle = gyroAngle + (float)gyroRate*loopTime/1000;
+  // subtract the last reading:
+  total = total - readings[readIndex];
+  // read from the sensor:
+  readings[readIndex] = accY;
+  // add the reading to the total:
+  total = total + readings[readIndex];
+  // advance to the next position in the array:
+  readIndex = readIndex + 1;
 
-  // Calculate angle based on accelerometer data
-  // TODO: make accAngle centered around 0
+  // if we're at the end of the array...
+  if (readIndex >= numReadings) {
+    // ...wrap around to the beginning:
+    readIndex = 0;
+  }
 
-  // OLD buggy because tangent
-  // accAngle = atan2(accY, accZ)*RAD_TO_DEG;
+  // calculate the average:
+  average = total / numReadings;
+  // send it to the computer as ASCII digits
 
-  // combine gyro and accelerometer readings OLD
-  // currentAngle = 0.9934*(prevAngle + gyroAngle) + 0.0066*(accAngle);
-
-
-  last = accY;
-  last2 = last;
-  last3 = last2;
-  last4 = last3;
-  last5 = last4;
-  accY = map(mpu.getAccelerationZ(), -32768, 32767, -255, 255) + 20;
-
-  trailAvg = (accY + last + last2)/5;
-
-  Serial.print(accY);
+  Serial.print(Output);
   Serial.print(',');
-  Serial.println(trailAvg);
+  Serial.println(average);
+  delay(1);        // delay in between reads for stability
+
+
+  // last = accY;
+  // last2 = last;
+  // last3 = last2;
+  // last4 = last3;
+  // last5 = last4;
+  // accY = map(mpu.getAccelerationZ(), -32768, 32767, -255, 255) + 20;
+
+  // trailAvg = (accY + last + last2 + last3 + last4 + last5)/6;
+  // delay(300);
+
+  // Serial.print(accY);
+  // Serial.print(',');
+  // Serial.println(trailAvg);
 
 
   // Set input to calibrated difference between sensors
-  Input = accY;
+  Input = average;
 
   pid.Compute();
 
